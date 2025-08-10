@@ -306,12 +306,11 @@ class UNet(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
         self.final = nn.Conv2d(layers[0], n_classes, kernel_size=1)
-        # self.final_mask = UnsharpMask(kernel_size=(3,3),sigma=(1.0,1.0))
 
     def get_embedding_dim(self):
         return 1
     
-    def forward(self, x,scale = (1,1,4.0,4.0),last = None,freeze = None):
+    def forward(self, x, last = None, freeze = None):
         #Resizing Step
         B, C, H, W = x.shape
         new_height = int(H * self.scales[0])

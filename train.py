@@ -73,7 +73,7 @@ def train_unet(cfg = None):
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False,num_workers = 6,pin_memory = True)
 
     # defining the model
-    model = UNet(in_c=1, n_classes=1, layers=[4, 8, 16]).to(device)
+    model = UNet(in_c=cfg["model_params"]["in_channels"], n_classes=cfg["model_params"]["out_channels"], layers=cfg["model_params"]["layers"]).to(device)
 
 
     if not resume:
@@ -116,7 +116,7 @@ def train_unet(cfg = None):
         
         train_epoch_loss.append(np.array(running_train_loss).mean())
         model.eval()
-        
+
         with torch.no_grad():
             print("Validating")
             eval_psnr = 0

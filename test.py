@@ -8,6 +8,7 @@ from torchvision.utils import save_image
 from torch.utils.data.dataloader import DataLoader
 from torchvision.transforms import transforms
 
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 def run_sr_test(model, test_loader, save_dir, device='cuda'):
     """
@@ -32,7 +33,7 @@ def run_sr_test(model, test_loader, save_dir, device='cuda'):
 
             # Compute metrics (replace with your metric functions)
             
-            ssim,psnr = score(HR_imgs,SR)
+            ssim,psnr = score(HR_imgs,SR_imgs)
 
             psnr_total += psnr
             ssim_total += ssim
@@ -54,8 +55,8 @@ def main(config = None):
         transforms.ToTensor()
     ])
 
-    test_dataset = US_dataset(config['test_dir'],transform=transform)
+    test_dataset = US_dataset(os.path.join(config['dataset']['base_dir'],config['dataset']['test']),transform=transform)
     test_loader = DataLoader(test_dataset,config['test_bs'],shuffle=True)
 
-    model = UNet(config['in_channels'],config["num_classes"],layers = [4,8,16])
-    run_sr_test(model,test_loader,config[''])
+    model = UNet(in_c=config["model_params"]["in_channels"], n_classes=config["model_params"]["out_channels"], layers=config["model_params"]["layers"]).to(device)
+    run_sr_test(model,test_loader,config['res_dir'])
