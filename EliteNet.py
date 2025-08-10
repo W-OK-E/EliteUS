@@ -59,42 +59,27 @@ class ResBlock(nn.Module):
     def __init__(self, in_c, out_c, dilation = [1,2,3]):
         super(ResBlock, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_c)
-        #self.relu = nn.ReLU(inplace=True)
+
         self.mish = nn.GELU()
         self.conv1 = nn.Conv2d(in_c, out_c // 4 , 1)
         self.bn2 = nn.BatchNorm2d(out_c // 4)
-        #self.relu = nn.ReLU(inplace=True)
+
         self.conv2 = nn.Conv2d(out_c // 4, out_c // 4, 3, padding='same')
-        # self.conv3 = nn.Conv2d(out_c * 4, out_c, 3, padding='same', dilation=dilation[1])
-        # self.conv4 = nn.Conv2d(out_c * 4, out_c, 3, padding='same', dilation=dilation[2])
-        
-        
-        #self.conv2 = nn.Conv2d(output_channels/4, output_channels/4, 3, stride, padding = 1, bias = False)
         self.dropout = nn.Dropout(0.2)
         self.bn3 = nn.BatchNorm2d(out_c // 4)
-        #self.relu = nn.ReLU(inplace=True)
+
         self.conv5 = nn.Conv2d(out_c // 4, out_c, 1, 1, bias = False)
         self.conv6 = nn.Conv2d(in_c, out_c , 1, 1, padding='same', bias = False)
         
     def forward(self, x):
-        #residual = x
-        #out = self.bn1(x)
-        #out = self.mish(out)
         out = self.conv1(x)
-        #out = self.bn2(out)
         out = self.mish(out)
         out = self.conv2(out)
-        # out2 = self.conv3(out)
-        # out3 = self.conv4(out)
-        # out = torch.add(torch.add(out1,out2),out3)
-        #out =  self.conv2(out)+ self.conv3(out)+ self.conv4(out)
         out = self.bn3(out)
         out = self.dropout(out)
         out = self.mish(out)
         out = self.conv5(out)
         
-       
-        #if (self.input_channels != self.output_channels) or (self.stride !=1 ):
         residual = self.conv6(x)
         out += residual
         return out
@@ -124,14 +109,12 @@ class AttConvBlock(torch.nn.Module):
         if attention==True:
             self.mpool1 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
 
-            #self.softmax1_blocks = DiResBlock(in_c, out_c, dilation= [1,2,4])
             self.softmax1_blocks = nn.Conv2d(in_c, out_c, kernel_size=k_sz, padding='same', dilation= 6)
 
             self.skip1_connection_residual_block = nn.Conv2d(out_c, out_c, kernel_size=k_sz, padding='same')
 
             self.mpool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
 
-            #self.softmax2_blocks = DiResBlock(out_c, out_c, dilation= [2,4,8])
             self.softmax2_blocks = nn.Conv2d(out_c, out_c, kernel_size=k_sz, padding='same', dilation= 4)
 
             self.skip2_connection_residual_block = nn.Conv2d(out_c, out_c, kernel_size=k_sz, padding='same')
@@ -145,12 +128,10 @@ class AttConvBlock(torch.nn.Module):
 
             self.interpolation3 = nn.UpsamplingBilinear2d(scale_factor=2)
 
-            #self.softmax4_blocks = DiResBlock(out_c, out_c, dilation= [2,4,8])
             self.softmax4_blocks = nn.Conv2d(out_c, out_c, kernel_size=k_sz, padding='same', dilation= 4)
 
             self.interpolation2 = nn.UpsamplingBilinear2d(scale_factor=2)
 
-            #self.softmax5_blocks = DiResBlock(out_c, out_c, dilation= [1,2,4])
             self.softmax5_blocks = nn.Conv2d(out_c, out_c, kernel_size=k_sz, padding='same', dilation= 2)
 
             self.interpolation1 = nn.UpsamplingBilinear2d(scale_factor=2)
@@ -170,20 +151,20 @@ class AttConvBlock(torch.nn.Module):
     def forward(self, x, attention = False):
         if self.pool: x = self.pool(x)
         out_trunk = self.conv(x)
+
         if attention==True:
             out_mpool1 = self.mpool1(x)
             out_softmax1 = self.softmax1_blocks(out_mpool1)
             out_skip1_connection = self.skip1_connection_residual_block(out_softmax1)
             out_mpool2 = self.mpool2(out_softmax1)
             out_softmax2 = self.softmax2_blocks(out_mpool2)
-            #print(out_softmax2.data.shape)
+
             out_skip2_connection = self.skip2_connection_residual_block(out_softmax2)
             out_mpool3 = self.mpool3(out_softmax2)
             out_softmax3 = self.softmax3_blocks(out_mpool3)
-            #
+            
             out_interp3 = self.interpolation3(out_softmax3)
-            #print(out_skip2_connection.data.shape)
-            #print(out_interp3.data.shape)
+
             out = torch.add(out_interp3, out_skip2_connection)
             out_softmax4 = self.softmax4_blocks(out)
             out_interp2 = self.interpolation2(out_softmax4)
@@ -191,8 +172,7 @@ class AttConvBlock(torch.nn.Module):
             out_softmax5 = self.softmax5_blocks(out)
             out_interp1 = self.interpolation1(out_softmax5)
             out_softmax6 = self.softmax6_blocks(out_interp1)
-            #print(out_softmax6.shape)
-            #print(out_trunk.shape)
+
             out = torch.multiply((1 + out_softmax6), out_trunk)
             out = self.last_blocks(out)
         else:
@@ -237,14 +217,6 @@ class DoubleAttBlock(torch.nn.Module):
 class ConvBridgeBlock(torch.nn.Module):
     def __init__(self, channels, k_sz=3):
         super(ConvBridgeBlock, self).__init__()
-        # pad = (k_sz - 1) // 2
-        # block=[]
-
-        # block.append(nn.Conv2d(channels, channels, kernel_size=k_sz, padding=pad))
-        # block.append(nn.ReLU())
-        # block.append(nn.BatchNorm2d(channels))
-
-        # self.block = nn.Sequential(*block)
         self.block = ResBlock(channels, channels)
 
     def forward(self, x):
@@ -265,7 +237,6 @@ class UpConvBlock(torch.nn.Module):
     def forward(self, x, skip):
         up = self.up_layer(x)
         up = self.conv_layer1(up, attention = True)
-        #skip = torch.multiply((1 + up), skip)
         if self.conv_bridge:
             skip = self.conv_bridge_layer(skip)
             skip = torch.multiply((1 + up), skip)
@@ -342,9 +313,13 @@ class UNet(nn.Module):
     
     def forward(self, x,scale = (1,1,4.0,4.0),last = None,freeze = None):
         #Resizing Step
-        x = F.interpolate(x,scale_factor=self.scale,mode = 'billinear')
-        print("Before the first Layer",x.shape)
+        B, C, H, W = x.shape
+        new_height = int(H * self.scales[0])
+        new_width  = int(W * self.scales[1])
+
+        x = F.interpolate(x, size=(new_height, new_width), mode='bilinear', align_corners=False)
         x = self.first(x)
+
         down_activations = []
         for i, down in enumerate(self.down_path):
             down_activations.append(x)

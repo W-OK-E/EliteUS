@@ -1,0 +1,43 @@
+logging:
+  models_dir: "models"
+  losses_dir: "losses"
+  log_interval: 10 #Log interval is only for plotting losses, models were saved only if validation loss improved.
+
+dataset:
+  base_dir: "/KGP_Data"
+  train_dir: "train"
+  val_dir: "val"
+
+# Resume training flag
+resume: false
+ckpt: "../models/best.pth" # THe path to a pretrained model
+ 
+# Training parameters
+lr: 1e-5           # Learning rate
+epochs: 500        # Number of epochs to train
+batch_size: 1      # Try decreasing if memory error
+
+# Log interval for training and validation
+log_interval: 25
+
+# Testing parameters
+test_dir: "/KGP_Data/test"
+res_dir: "results"
+quick_res_dir: "quick_results"
+test_bs: 1  #Test result dir   
+
+# Loss function configuration
+loss:
+  # Choose one from the available options:
+  # SSIMLoss, VGG, SSIM_FOCAL, FOCAL_L1, SSIM_L1, FOCAL_Char,
+  # SSIM_FFL, mse_FFL, Laplace_Loss, SSIM_Laplace, Laplace, L2_Total
+  name: "SSIM_Laplace"
+
+  # Parameters for the chosen loss (ignored if not applicable)
+  params:
+    w: 0.5          # Weight factor (for combined losses)
+    kernel_size: 3  # For Laplace-based losses
+    rgb_range: 1    # For VGG-based losses
+    conv_index: "54" # For VGG-based losses
+    gradient: true  # For FDL-based focal losses
+    model: "EffNet" # Model name for FDL-based losses

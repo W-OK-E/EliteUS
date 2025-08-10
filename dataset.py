@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
-class DAE_dataset(Dataset):
+class US_dataset(Dataset):
     def __init__(self, data_dir, transform = None):
         self.data_dir = data_dir
         self.transform = transform

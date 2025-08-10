@@ -1,122 +1,61 @@
-import os, shutil, cv2
-import numpy as np
+import os
 import torch
-from torchvision import transforms
-from unet2 import UNet
-from datasets import custom_test_dataset, DAE_dataset
-import config as cfg
-from psnr import score
-from skimage.metrics import peak_signal_noise_ratio
-from skimage.metrics import structural_similarity
-import tqdm
+from tqdm import tqdm
+from EliteNET import UNet
+from utils.utils import score
+from dataset import US_dataset
+from torchvision.utils import save_image
+from torch.utils.data.dataloader import DataLoader
+from torchvision.transforms import transforms
 
-res_dir = cfg.res_dir
-if os.path.exists(res_dir):
-    shutil.rmtree(res_dir)
 
-if not os.path.exists(res_dir):
-    os.mkdir(res_dir)
-    
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-# device = torch.device('cpu')
-print('device: ', device)
+def run_sr_test(model, test_loader, save_dir, device='cuda'):
+    """
+    Run super-resolution test using an existing dataset class.
 
-transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize((156,128)),
+    Args:
+        model: The trained SR model.
+        dataset_class: Your dataset class (unchanged).
+        data_dir: Directory containing test images.
+        device: 'cuda' or 'cpu'.
+    """
+    model.eval()
+    model.to(device)
+
+    psnr_total, ssim_total, count = 0, 0, 0
+
+    with torch.no_grad():
+        for batch_idx, (HR_imgs, LR_imgs) in tqdm(enumerate(test_loader)):
+            HR_imgs, LR_imgs = HR_imgs.to(device), LR_imgs.to(device)
+            
+            SR_imgs = model(LR_imgs)
+
+            # Compute metrics (replace with your metric functions)
+            
+            ssim,psnr = score(HR_imgs,SR)
+
+            psnr_total += psnr
+            ssim_total += ssim
+            count += 1
+
+            save_image(LR_imgs[0].cpu(), os.path.join(save_dir,f"LR_{batch_idx}.jpg"))
+            save_image(HR_imgs[0].cpu(), os.path.join(save_dir,f"HR_{batch_idx}.jpg"))
+            save_image(SR_imgs[0].cpu(), os.path.join(save_dir,f"SR_{batch_idx}.jpg"))
+
+
+    print(f"Average PSNR: {psnr_total / count:.2f}")
+    print(f"Average SSIM: {ssim_total / count:.4f}")
+
+def main(config = None):
+    transform = transforms.Compose([
         transforms.ToTensor(),
-        # transforms.Normalize(mean=0.0, std=1),
         transforms.ToPILImage(),
         transforms.Pad((0, 18), padding_mode='reflect'),
         transforms.ToTensor()
     ])
-test_transform = transform
 
-test_dir = '/home/omkumar/Denoising/UNET/KGP_Data/tes'
-print("test directory:",test_dir)
-test_dataset       = DAE_dataset(test_dir, transform=test_transform)
-test_loader        = torch.utils.data.DataLoader(test_dataset, batch_size = 4, shuffle = not True)
+    test_dataset = US_dataset(config['test_dir'],transform=transform)
+    test_loader = DataLoader(test_dataset,config['test_bs'],shuffle=True)
 
-print('\nlen(test_dataset) : {}'.format(len(test_dataset)))
-print('len(test_loader)  : {}  @bs={}'.format(len(test_loader), cfg.test_bs))
-
-# defining the model
-model = UNet(in_c=1,n_classes = 1,layers=[4,8,16]).to(device)#, depth = cfg.depth, padding = True).to(device)
-
-ckpt_path = cfg.ckpt
-ckpt = torch.load(ckpt_path)
-print(f'\nckpt loaded: {ckpt_path}')
-model_state_dict = ckpt['model_state_dict']
-model.load_state_dict(model_state_dict)
-# model = ckpt #Since the entire model was saved, we donot meed to load_state_dict
-model.to(device)
-
-print("Results being saved in :",res_dir)
-print('\nDenoising noisy images...')
-model.eval()
-psnr_val = {}
-ssim_val = {}
-total_psnr = []
-total_ssim = []
-with torch.no_grad():
-    for batch_idx, (imgs,noisy_imgs,scale_info) in tqdm.tqdm(enumerate(test_loader)):
-        # print('batch: {}/{}'.format(str(batch_idx + 1).zfill(len(str(len(test_loader)))), len(test_loader)), end='\r')
-        imgs, noisy_imgs = imgs.to(device)[:5], noisy_imgs.to(device)[:5]
-        out = model(noisy_imgs)
-        # ssim,psnr = score(out,imgs)
-        # total_psnr.append(psnr)
-        # total_ssim.append(ssim)
-        # print(psnr)
-        idx = 0
-        for noisy,denoisy,orig_img,scale in zip(noisy_imgs,out,imgs,scale_info):
-            noisy = noisy.reshape(192,128,1).cpu().numpy()
-            denoisy = denoisy.reshape(192,128,1).cpu().numpy()
-            orig_img = orig_img.reshape(192,128,1).cpu().numpy()
-            save_path = os.path.join(res_dir,scale)
-
-            ssim,psnr = structural_similarity(denoisy,orig_img,multichannel = True),peak_signal_noise_ratio(denoisy,orig_img,data_range=1)
-            if scale in psnr_val:
-                psnr_val[scale].append(psnr)
-            else:
-                psnr_val[scale] = [psnr]
-
-            if scale in ssim_val:
-                ssim_val[scale].append(ssim)
-            else:
-                ssim_val[scale] = [ssim]
-            if(not os.path.exists(save_path)):
-                os.mkdir(save_path)
-            
-            # # print("Max value is denoised:",denoisy.max(),"Mean of noisy:",noisy.mean(),"Mean of denoised:",denoisy.mean())
-            # cv2.imwrite(os.path.join(res_dir, f'denoised{str(idx).zfill(3)}_{scale}.jpg'), (denoisy*255).astype(np.uint8))
-            # cv2.imwrite(os.path.join(res_dir, f'Noised{str(idx).zfill(3)}_{scale}.jpg'), (noisy*255).astype(np.uint8))
-            # cv2.imwrite(os.path.join(res_dir, f'Orig{str(idx).zfill(3)}_{scale}.jpg'), (orig_img*255).astype(np.uint8))
-
-            cv2.imwrite(os.path.join(save_path, f'denoised{str(idx).zfill(3)}.jpg'), (denoisy*300).astype(np.uint8))
-            cv2.imwrite(os.path.join(save_path, f'Noised{str(idx).zfill(3)}.jpg'), (noisy*255).astype(np.uint8))
-            cv2.imwrite(os.path.join(save_path, f'Orig{str(idx).zfill(3)}.jpg'), (orig_img*255).astype(np.uint8))
-            idx += 1
-        
-# print("Psnr Values:",psnr_val)
-# print("Mean PSNR:",np.mean(total_psnr),"Mean SSIM = ",np.mean(total_ssim))
-
-all_scales_psnr = []
-all_scales_ssim = []
-txt_file = os.path.join(res_dir,"Metrics.txt")
-with open(txt_file,'w') as file:
-    file.write(f"Image Denoised using: {ckpt_path}\n")
-    try:
-        for key,val in psnr_val.items():
-            file.write(f"For Scale: {key}, Mean PSNR: {np.mean(val)}\n")
-            all_scales_psnr.append(np.mean(val))
-        for key,val in ssim_val.items():
-            file.write(f"For Scale: {key}, Mean SSIM: {np.mean(val)}\n")
-            all_scales_ssim.append(np.mean(val))
-        file.write(f"MEAN PSNR: {np.mean(all_scales_psnr)}, MEAN_SSIM: {np.mean(all_scales_ssim)}")
-    except:
-        pass
-
-print("MEAN PSNR:",np.mean(all_scales_psnr),"MEAN_SSIM:",np.mean(all_scales_ssim))
-print('\n\nresults saved in \'{}\' directory'.format(res_dir))
-
-print('\nFin.')
+    model = UNet(config['in_channels'],config["num_classes"],layers = [4,8,16])
+    run_sr_test(model,test_loader,config[''])
