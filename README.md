@@ -1,4 +1,4 @@
-# ELiTNet
+# ELiTUS
 
 A Lightweight Framework for Arbitrary Scale Super-Resolution in Ultrasound Imaging
 
